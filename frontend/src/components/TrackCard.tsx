@@ -46,8 +46,7 @@ export function TrackCard({ track }: { track: Track }) {
         </button>
         {menu && (
           <div role="menu" className="absolute right-0 mt-1 w-48 rounded-md bg-elevated p-1 shadow-2xl shadow-black z-20 text-sm">
-            <a role="menuitem" className="block rounded px-3 py-2 hover:bg-white/10" href={apiUrl(`${track.audio.vocals_wav}?download=true`)}>Download vocals (WAV)</a>
-            <a role="menuitem" className="block rounded px-3 py-2 hover:bg-white/10" href={apiUrl(`${track.audio.vocals_mp3}?download=true`)}>Download vocals (MP3)</a>
+            <a role="menuitem" className="block rounded px-3 py-2 hover:bg-white/10" href={apiUrl(`${track.audio.vocals_mp3}?download=true`)}>Download vocals</a>
             <button role="menuitem" className="block w-full text-left rounded px-3 py-2 hover:bg-white/10"
               onClick={() => { setMenu(false); player.play(track, "original"); }}>Play original</button>
             <button role="menuitem" className="block w-full text-left rounded px-3 py-2 text-red-400 hover:bg-white/10"

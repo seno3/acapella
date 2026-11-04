@@ -3,12 +3,13 @@ from __future__ import annotations
 
 import logging
 import queue
+import re
 import shutil
 import threading
 import uuid
 from pathlib import Path
 
-from .audio import duration_seconds, save_mp3, save_wav
+from .audio import duration_seconds, save_mp3
 from .db import Database
 from .pipeline import GATE_SETTINGS, extract_vocals
 from .separation import MODELS, VocalSeparator
@@ -17,11 +18,12 @@ log = logging.getLogger(__name__)
 
 
 class JobQueue:
-    def __init__(self, db: Database, separator_factory, data_dir: Path):
+    def __init__(self, db: Database, separator_factory, data_dir: Path, tracks_dir: Path):
         self.db = db
         self._separator_factory = separator_factory
         self._separator: VocalSeparator | None = None
         self.data_dir = data_dir
+        self.tracks_dir = tracks_dir
         self._queue: queue.Queue[str | None] = queue.Queue()
         self._thread: threading.Thread | None = None
 
@@ -62,16 +64,14 @@ class JobQueue:
 
         separator = self.separator
         track_id = uuid.uuid4().hex
-        track_dir = self.data_dir / "tracks" / track_id
-        track_dir.mkdir(parents=True, exist_ok=True)
+        original = self.data_dir / "originals" / f"{track_id}{input_path.suffix.lower()}"
+        mp3: Path | None = None
         try:
             result = extract_vocals(input_path, job["strength"], separator, self.data_dir / "tmp", progress)
 
-            progress(0.95, "Encoding WAV and MP3")
-            original = track_dir / f"original{input_path.suffix.lower()}"
+            progress(0.95, "Encoding MP3")
             shutil.move(str(input_path), original)
-            wav, mp3 = track_dir / "vocals.wav", track_dir / "vocals.mp3"
-            save_wav(wav, result.vocals, result.sample_rate)
+            mp3 = unique_path(self.tracks_dir, safe_filename(job["title"]), ".mp3")
             save_mp3(mp3, result.vocals, result.sample_rate)
 
             settings = {
@@ -85,10 +85,25 @@ class JobQueue:
                 settings["noise_gate"] = GATE_SETTINGS
             track = self.db.create_track(
                 track_id, job["title"], duration_seconds(original), settings,
-                str(original), str(wav), str(mp3),
+                str(original), str(mp3),
             )
         except Exception:
-            shutil.rmtree(track_dir, ignore_errors=True)
-            input_path.unlink(missing_ok=True)
+            for path in (input_path, original, mp3):
+                if path:
+                    path.unlink(missing_ok=True)
             raise
         self.db.update_job(job_id, status="done", progress=1.0, message="Done", track_id=track["id"])
+
+
+def safe_filename(title: str) -> str:
+    """Turn a track title into a name that is valid on macOS, Windows and Linux."""
+    name = re.sub(r'[\\/:*?"<>|\x00-\x1f]', "", title).strip(" .")
+    return name[:150] or "Untitled"
+
+
+def unique_path(folder: Path, stem: str, suffix: str) -> Path:
+    """folder/stem.mp3, or folder/stem (2).mp3 etc. if that name is taken."""
+    path, n = folder / f"{stem}{suffix}", 2
+    while path.exists():
+        path, n = folder / f"{stem} ({n}){suffix}", n + 1
+    return path

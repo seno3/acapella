@@ -69,6 +69,14 @@ picks another one and prints it.
 The first job takes longer than the rest because it downloads models: about 900 MB for Mel-Roformer, 640 MB
 for BS-Roformer, and HT-Demucs only if a fallback is needed.
 
+### Where files go
+
+- `tracks/` (repo root): the finished vocals, one MP3 per song, named after its title, e.g.
+  `Laufey - The Risk.mp3`. A second song with the same title becomes `Laufey - The Risk (2).mp3`.
+  Don't rename or move these files while the app is running; the library looks them up by name.
+- `backend/data/`: everything else. The SQLite database, `originals/` (the songs you uploaded), `models/`,
+  and the scratch folders `uploads/` and `tmp/`.
+
 ### Production build
 
 ```bash
@@ -99,7 +107,8 @@ Noise gate defaults (see `backend/app/pipeline.py`): threshold −40 dB below th
 
 | Env var                     | Default                                         |
 |-----------------------------|-------------------------------------------------|
-| `ACAPELLA_DATA_DIR`         | `backend/data` (SQLite DB, uploads, tracks, models) |
+| `ACAPELLA_DATA_DIR`         | `backend/data` (SQLite DB, originals, models) |
+| `ACAPELLA_TRACKS_DIR`       | `tracks` at the repo root (finished vocal MP3s) |
 | `ACAPELLA_PRIMARY_MODEL`    | `vocals_mel_band_roformer.ckpt`                 |
 | `ACAPELLA_SECONDARY_MODEL`  | `model_bs_roformer_ep_317_sdr_12.9755.ckpt`     |
 | `ACAPELLA_FALLBACK_MODEL`   | `htdemucs_ft.yaml`                              |
@@ -116,7 +125,7 @@ You can use any vocal model that `audio-separator --list_models` shows. For even
 | `GET /api/jobs/{id}`                       | Poll a job: `status` (queued/processing/done/failed), `progress` 0–1, `message`, `track_id`. |
 | `GET /api/jobs?active=true`                | Jobs that are still queued or running.                           |
 | `GET /api/tracks`                          | Library: title, duration, settings, audio URLs.                  |
-| `GET /api/tracks/{id}/audio/{kind}`        | `kind` = `original`, `vocals_wav` or `vocals_mp3`. Supports range requests; add `?download=true` for an attachment. |
+| `GET /api/tracks/{id}/audio/{kind}`        | `kind` = `original` or `vocals_mp3`. Supports range requests; add `?download=true` for an attachment. |
 | `DELETE /api/tracks/{id}`                  | Delete a track and its files.                                    |
 | `GET /api/health`                          | Device in use and whether ffmpeg was found.                      |
 
@@ -136,7 +145,7 @@ a fake separator, so no models are downloaded. They check:
 - the min-magnitude ensemble removes each model's leak by 20 dB or more while keeping the vocal
 - the gate makes gaps exactly zero while leaving phrases untouched
 - the right number of model passes runs at each strength
-- WAV and MP3 encoding
+- WAV loading and MP3 encoding
 - fallback to HT-Demucs and the GPU-to-CPU retry
 - the full upload → poll → library → stream → delete flow through the API
 

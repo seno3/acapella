@@ -6,7 +6,7 @@ export interface Track {
   duration: number;
   created_at: number;
   settings: { strength: Strength; device: string; models: string[]; steps: string[] };
-  audio: { original: string; vocals_wav: string; vocals_mp3: string };
+  audio: { original: string; vocals_mp3: string };
 }
 
 export interface Job {

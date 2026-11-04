@@ -10,7 +10,7 @@ from fastapi import FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 
-from .config import ALLOWED_EXTENSIONS, STRENGTHS, cors_origins, default_data_dir
+from .config import ALLOWED_EXTENSIONS, STRENGTHS, cors_origins, default_data_dir, default_tracks_dir
 from .db import Database
 from .jobs import JobQueue
 from .separation import AudioSeparatorBackend, detect_device, ffmpeg_available
@@ -18,14 +18,16 @@ from .separation import AudioSeparatorBackend, detect_device, ffmpeg_available
 MEDIA_TYPES = {".mp3": "audio/mpeg", ".wav": "audio/wav", ".flac": "audio/flac", ".m4a": "audio/mp4"}
 
 
-def create_app(data_dir: Path | None = None, separator_factory=None) -> FastAPI:
+def create_app(data_dir: Path | None = None, separator_factory=None, tracks_dir: Path | None = None) -> FastAPI:
     data_dir = Path(data_dir or default_data_dir())
-    for sub in ("uploads", "tracks", "tmp", "models"):
+    tracks_dir = Path(tracks_dir or default_tracks_dir())
+    for sub in ("uploads", "originals", "tmp", "models"):
         (data_dir / sub).mkdir(parents=True, exist_ok=True)
+    tracks_dir.mkdir(parents=True, exist_ok=True)
 
     db = Database(data_dir / "acapella.db")
     factory = separator_factory or (lambda: AudioSeparatorBackend(data_dir / "models", data_dir / "tmp"))
-    jobs = JobQueue(db, factory, data_dir)
+    jobs = JobQueue(db, factory, data_dir, tracks_dir)
 
     @asynccontextmanager
     async def lifespan(app: FastAPI):
@@ -45,8 +47,7 @@ def create_app(data_dir: Path | None = None, separator_factory=None) -> FastAPI:
             "duration": t["duration"],
             "settings": t["settings"],
             "created_at": t["created_at"],
-            "audio": {"original": f"{base}/original", "vocals_wav": f"{base}/vocals_wav",
-                      "vocals_mp3": f"{base}/vocals_mp3"},
+            "audio": {"original": f"{base}/original", "vocals_mp3": f"{base}/vocals_mp3"},
         }
 
     def job_out(j: dict) -> dict:
@@ -100,14 +101,14 @@ def create_app(data_dir: Path | None = None, separator_factory=None) -> FastAPI:
     @app.get("/api/tracks/{track_id}/audio/{kind}")
     def get_audio(track_id: str, kind: str, download: bool = False):
         track = db.get_track(track_id)
-        column = {"original": "original_path", "vocals_wav": "vocals_wav_path", "vocals_mp3": "vocals_mp3_path"}
+        column = {"original": "original_path", "vocals_mp3": "vocals_path"}
         if not track or kind not in column:
             raise HTTPException(404, "Not found")
         path = Path(track[column[kind]])
         if not path.exists():
             raise HTTPException(404, "File missing")
-        suffix = "" if kind == "original" else " (vocals)"
-        filename = f"{track['title']}{suffix}{path.suffix}" if download else None
+        # Vocals download under the same name they have in the tracks folder.
+        filename = (f"{track['title']}{path.suffix}" if kind == "original" else path.name) if download else None
         return FileResponse(path, media_type=MEDIA_TYPES.get(path.suffix, "application/octet-stream"),
                             filename=filename)
 
@@ -117,7 +118,8 @@ def create_app(data_dir: Path | None = None, separator_factory=None) -> FastAPI:
         if not track:
             raise HTTPException(404, "Track not found")
         db.delete_track(track_id)
-        shutil.rmtree(Path(track["vocals_wav_path"]).parent, ignore_errors=True)
+        Path(track["original_path"]).unlink(missing_ok=True)
+        Path(track["vocals_path"]).unlink(missing_ok=True)
 
     return app
 

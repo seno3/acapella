@@ -14,8 +14,7 @@ CREATE TABLE IF NOT EXISTS tracks (
     duration REAL NOT NULL,
     settings TEXT NOT NULL,
     original_path TEXT NOT NULL,
-    vocals_wav_path TEXT NOT NULL,
-    vocals_mp3_path TEXT NOT NULL,
+    vocals_path TEXT NOT NULL,
     created_at REAL NOT NULL
 );
 CREATE TABLE IF NOT EXISTS jobs (
@@ -80,11 +79,10 @@ class Database:
 
     # Tracks
     def create_track(self, track_id: str, title: str, duration: float, settings: dict,
-                     original_path: str, vocals_wav_path: str, vocals_mp3_path: str) -> dict:
+                     original_path: str, vocals_path: str) -> dict:
         self._exec(
-            "INSERT INTO tracks VALUES (?,?,?,?,?,?,?,?)",
-            (track_id, title, duration, json.dumps(settings), original_path,
-             vocals_wav_path, vocals_mp3_path, time.time()),
+            "INSERT INTO tracks VALUES (?,?,?,?,?,?,?)",
+            (track_id, title, duration, json.dumps(settings), original_path, vocals_path, time.time()),
         )
         return self.get_track(track_id)
 
