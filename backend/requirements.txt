@@ -1,0 +1,10 @@
+# Vocal separation (pulls in torch + onnxruntime). On an NVIDIA machine use
+# "audio-separator[gpu]" instead to get CUDA-enabled onnxruntime.
+audio-separator[cpu]>=0.30
+fastapi>=0.115
+uvicorn[standard]>=0.30
+python-multipart>=0.0.9
+numpy
+scipy
+soundfile>=0.12
+lameenc>=1.7
